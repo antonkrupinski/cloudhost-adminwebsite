@@ -158,8 +158,9 @@
     <form id="repoForm">
       <label for="repoUrl">GitHub Repository URL</label>
       <input type="text" id="repoUrl" placeholder="https://github.com/username/repo" required>
-      <label for="envVars">Environment Variables (key=value, one per line)</label>
-      <textarea id="envVars" rows="4" placeholder="TOKEN=your_token\nPREFIX=!"></textarea>
+      <label>Environment Variables</label>
+      <div id="envVarsList"></div>
+      <button type="button" id="addEnvVarBtn" style="margin-bottom:1.2rem;background:#23272a;color:#b3baff;">+ Add Variable</button>
       <button type="submit">Launch Bot</button>
     </form>
     <div id="terminalContainer" style="display:none; margin-top:2.5rem;">
@@ -171,7 +172,43 @@
     </div>
   </main>
   <script>
-    // Cookie helpers
+    // --- ENV VARS DYNAMIC UI ---
+    function createEnvVarRow(name = '', value = '') {
+      const row = document.createElement('div');
+      row.style.display = 'flex';
+      row.style.gap = '0.5rem';
+      row.style.marginBottom = '0.7rem';
+      row.innerHTML = `
+        <input type="text" placeholder="Name" value="${name}" style="flex:1; padding:0.5rem; border-radius:6px; border:1.5px solid #5865f2; background:rgba(35,39,42,0.7); color:#fff;" required>
+        <input type="text" placeholder="Value" value="${value}" style="flex:2; padding:0.5rem; border-radius:6px; border:1.5px solid #5865f2; background:rgba(35,39,42,0.7); color:#fff;" required>
+        <button type="button" style="background:#b33a3a;color:#fff;padding:0.5rem 0.8rem;border-radius:6px;border:none;font-weight:700;">&times;</button>
+      `;
+      row.querySelector('button').onclick = () => {
+        row.remove();
+      };
+      return row;
+    }
+    function getEnvVarsFromUI() {
+      const list = document.getElementById('envVarsList');
+      const vars = [];
+      list.querySelectorAll('div').forEach(row => {
+        const inputs = row.querySelectorAll('input');
+        if (inputs[0].value && inputs[1].value) {
+          vars.push({ name: inputs[0].value, value: inputs[1].value });
+        }
+      });
+      return vars;
+    }
+    function setEnvVarsUI(vars) {
+      const list = document.getElementById('envVarsList');
+      list.innerHTML = '';
+      (vars && vars.length ? vars : [{name:'',value:''}]).forEach(v => {
+        list.appendChild(createEnvVarRow(v.name, v.value));
+      });
+    }
+    document.getElementById('addEnvVarBtn').onclick = function() {
+      document.getElementById('envVarsList').appendChild(createEnvVarRow());
+    };
     function setCookie(name, value, days) {
       let expires = '';
       if (days) {
@@ -195,9 +232,10 @@
     // Restore previous session
     window.onload = function() {
       const repoUrl = getCookie('repoUrl');
-      const envVars = getCookie('envVars');
+      let envVars = [];
+      try { envVars = JSON.parse(getCookie('envVars') || '[]'); } catch {}
       if (repoUrl) document.getElementById('repoUrl').value = repoUrl;
-      if (envVars) document.getElementById('envVars').value = envVars;
+      setEnvVarsUI(envVars);
       if (getCookie('botRunning') === 'true') {
         showTerminal();
         appendTerminal('Restored session. Bot is running...');
@@ -224,9 +262,9 @@
     document.getElementById('repoForm').onsubmit = function(e) {
       e.preventDefault();
       const repoUrl = document.getElementById('repoUrl').value.trim();
-      const envVars = document.getElementById('envVars').value.trim();
+      const envVars = getEnvVarsFromUI();
       setCookie('repoUrl', repoUrl, 7);
-      setCookie('envVars', envVars, 7);
+      setCookie('envVars', JSON.stringify(envVars), 7);
       setCookie('botRunning', 'true', 7);
       clearTerminal();
       showTerminal();
@@ -235,6 +273,7 @@
         appendTerminal('Installing dependencies...');
         setTimeout(() => {
           appendTerminal('Setting environment variables...');
+          envVars.forEach(v => appendTerminal(`<span style=\"color:#b3baff;\">${v.name}=${v.value}</span>`));
           setTimeout(() => {
             appendTerminal('Launching bot...');
             setTimeout(() => {
